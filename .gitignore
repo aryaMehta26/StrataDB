@@ -30,3 +30,13 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Local databases, credentials, and generated test artifacts
+*.sst
+WAL
+MANIFEST
+LOCK
+.env
+coverage.out
+*.test
+.DS_Store
