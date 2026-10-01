@@ -1,5 +1,5 @@
 """Render committed raw benchmark data; requires matplotlib."""
-import json
+from validate import load_results
 from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
@@ -8,7 +8,7 @@ plt.rcParams["svg.fonttype"] = "none"
 plt.rcParams["svg.hashsalt"] = "stratadb"
 
 root = Path(__file__).parent
-rows = [json.loads(line) for line in (root / "results.jsonl").read_text().splitlines()]
+rows = load_results(root / "results.jsonl")
 fig, axes = plt.subplots(1, 2, figsize=(12, 4.8), layout="constrained", sharey=True)
 colors = {"stratadb": "#118b80", "bbolt": "#536ba8"}
 for ax, sync in zip(axes, [True, False]):
