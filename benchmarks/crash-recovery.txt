@@ -1,0 +1,5 @@
+=== RUN   TestCrashRecovery
+    db_test.go:284: 1000 SIGKILL/restart cycles: zero acknowledged-write loss
+--- PASS: TestCrashRecovery (189.36s)
+PASS
+ok  	github.com/aryaMehta26/StrataDB	189.601s
