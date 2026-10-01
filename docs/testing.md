@@ -42,3 +42,16 @@ python3 benchmarks/report.py
 ```
 
 Plotting needs Python 3 and matplotlib. The engine and benchmark CLI do not need Python. Record the machine, OS, toolchain, and background load when collecting a new sample. Avoid running the crash harness and benchmarks at the same time.
+
+## Check published evidence without rerunning workloads
+
+Run `make evidence` to validate the full engine/mode/workload matrix, check
+latency and derived metrics, test failure-safe result publication, and confirm
+that the README tables match the raw JSON. This target uses Python's standard
+library and Bash; it does not need matplotlib, AWS, or a database workload run.
+
+The benchmark runner writes temporary result files and publishes them only after
+all 16 configurations succeed. A failed run preserves the preceding results.
+The results file and environment file are replaced separately, so a process crash
+between those two renames can still leave mismatched files; rerun the suite if
+publication was interrupted. Keep the pair together when archiving a run.

@@ -15,6 +15,7 @@ jobs:
           python-version: '3.12'
       - run: python3 -m unittest discover -s benchmarks -p 'test_*.py'
       - run: python3 benchmarks/validate.py
+      - run: bash benchmarks/test_runner.sh
       - name: Check published tables match the raw data
         run: |
           python3 benchmarks/report.py
