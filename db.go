@@ -18,7 +18,10 @@ import (
 	"github.com/aryaMehta26/StrataDB/internal/storage"
 )
 
+// ErrNotFound means the key is absent or its newest version is a tombstone.
 var ErrNotFound = errors.New("stratadb: key not found")
+
+// ErrClosed is returned by operations after Close.
 var ErrClosed = errors.New("stratadb: database closed")
 
 // ObjectStore must provide immutable objects and exact byte ranges.
@@ -29,15 +32,26 @@ type ObjectStore interface {
 
 // Options defaults to fsync per mutation. NoSync sacrifices crash durability.
 type Options struct {
+	// MemtableBytes is a logical key/value-byte flush threshold, not a RAM limit.
+	// Nonpositive values select the 4 MiB default.
 	MemtableBytes int
-	NoSync        bool
-	Store         ObjectStore
-	CacheBytes    int
+	// NoSync skips per-write WAL sync. Flush and Close still synchronize.
+	NoSync bool
+	// Store is required when opening a database containing remote tables.
+	Store ObjectStore
+	// CacheBytes bounds cached remote payload bytes. Zero disables caching.
+	CacheBytes int
 }
+
+// Pair is a key and caller-owned value returned by Scan.
 type Pair struct {
 	Key   string
 	Value []byte
 }
+
+// Stats contains cumulative counters since Open; counters are not persisted.
+// TableBytes includes successful local writes and remote uploads.
+// BloomSkips includes both key-range and Bloom-filter rejections.
 type Stats struct {
 	UserBytes   uint64
 	WALBytes    uint64
@@ -53,6 +67,9 @@ type cacheEntry struct {
 	key  string
 	data []byte
 }
+
+// DB owns one directory. Methods are safe for concurrent callers, but operations
+// are serialized, including remote reads and maintenance. Do not copy a DB.
 type DB struct {
 	mu        sync.Mutex
 	dir       string
@@ -68,6 +85,8 @@ type DB struct {
 	cacheSize int
 }
 
+// Open locks dir exclusively, loads its manifest, and replays its WAL.
+// Only an incomplete trailing WAL frame is discarded; bad checksums fail open.
 func Open(dir string, opts Options) (*DB, error) {
 	if opts.MemtableBytes <= 0 {
 		opts.MemtableBytes = 4 << 20
@@ -159,9 +178,13 @@ func (d *DB) ready() error {
 	}
 	return d.failed
 }
+
+// Put stores a copy of value. Keys must be valid UTF-8; values may be arbitrary bytes.
 func (d *DB) Put(key string, value []byte) error {
 	return d.write(memtable.Entry{Key: key, Value: append([]byte(nil), value...)})
 }
+
+// Delete writes a tombstone, including when key does not currently exist.
 func (d *DB) Delete(key string) error { return d.write(memtable.Entry{Key: key, Deleted: true}) }
 func (d *DB) write(e memtable.Entry) error {
 	d.mu.Lock()
@@ -229,7 +252,12 @@ func (d *DB) block(ctx context.Context, t storage.Table, b storage.Block) ([]byt
 	}
 	return p, nil
 }
+
+// Get returns a caller-owned value or ErrNotFound.
 func (d *DB) Get(key string) ([]byte, error) { return d.GetContext(context.Background(), key) }
+
+// GetContext passes ctx to remote block fetches. Cancellation does not interrupt
+// waiting for the database mutex or local reads.
 func (d *DB) GetContext(ctx context.Context, key string) ([]byte, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -365,6 +393,8 @@ func (d *DB) flush() error {
 	}
 	return err
 }
+
+// Flush publishes pending mutations as a local SSTable and retires their WAL.
 func (d *DB) Flush() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -415,7 +445,12 @@ func (d *DB) Compact(remote bool) error {
 	}
 	return nil
 }
+
+// Stats returns a consistent copy of the current counters.
 func (d *DB) Stats() Stats { d.mu.Lock(); defer d.mu.Unlock(); return d.stats }
+
+// Close synchronizes and closes the WAL and releases the directory lock.
+// It is idempotent and does not flush the memtable into an SSTable.
 func (d *DB) Close() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
